@@ -86,6 +86,135 @@ def run_sem_analysis():
     # Retrieve parameter estimates, standard errors, and p-values from fitted model
     stats = model.inspect()
     
+    # ========== STEP 7.5: MODEL FIT EVALUATION ==========
+    print("\n" + "="*70)
+    print("MODEL FIT INDICES")
+    print("="*70)
+    
+    try:
+        # Use semopy's calc_stats to get fit indices
+        fit_stats = semopy.calc_stats(model)
+        
+        print("\n[Fit Indices] Model Fit Statistics:")
+        print("="*70)
+        
+        # Helper function to extract scalar value from Series
+        def get_scalar(series_or_value):
+            if hasattr(series_or_value, 'item'):
+                return series_or_value.item()
+            elif hasattr(series_or_value, 'values'):
+                return series_or_value.values[0] if len(series_or_value.values) > 0 else series_or_value
+            else:
+                return series_or_value
+        
+        # Display available fit indices
+        if 'DoF' in fit_stats:
+            dof = get_scalar(fit_stats['DoF'])
+            print(f"\nDegrees of Freedom (DoF): {dof}")
+        
+        if 'MLchi_sq' in fit_stats:
+            chi2 = get_scalar(fit_stats['MLchi_sq'])
+            print(f"\nChi-Square (χ²): {chi2:.4f}")
+            if 'DoF' in fit_stats and get_scalar(fit_stats['DoF']) > 0:
+                from scipy.stats import chi2 as chi2_dist
+                p_value = 1 - chi2_dist.cdf(chi2, get_scalar(fit_stats['DoF']))
+                print(f"P-value: {p_value:.4f}")
+                if p_value > 0.05:
+                    print("✓ Model fits well (p > 0.05)")
+                else:
+                    print("⚠ Model fit may be poor (p < 0.05)")
+        
+        if 'CFI' in fit_stats:
+            cfi = get_scalar(fit_stats['CFI'])
+            print(f"\nCFI (Comparative Fit Index): {cfi:.4f}")
+            print("Rule: CFI > 0.95 = excellent, 0.90-0.95 = acceptable, < 0.90 = poor")
+            if cfi > 0.95:
+                print("✓ Excellent fit")
+            elif cfi > 0.90:
+                print("✓ Acceptable fit")
+            else:
+                print("⚠ Poor fit")
+        
+        if 'RMSEA' in fit_stats:
+            rmsea = get_scalar(fit_stats['RMSEA'])
+            print(f"\nRMSEA (Root Mean Square Error of Approximation): {rmsea:.4f}")
+            print("Rule: RMSEA < 0.05 = excellent, 0.05-0.08 = acceptable, > 0.10 = poor")
+            if rmsea < 0.05:
+                print("✓ Excellent fit")
+            elif rmsea < 0.08:
+                print("✓ Acceptable fit")
+            elif rmsea < 0.10:
+                print("⚠ Mediocre fit")
+            else:
+                print("⚠ Poor fit")
+        
+        if 'SRMR' in fit_stats:
+            srmr = get_scalar(fit_stats['SRMR'])
+            print(f"\nSRMR (Standardized Root Mean Square Residual): {srmr:.4f}")
+            print("Rule: SRMR < 0.05 = excellent, 0.05-0.08 = acceptable, > 0.10 = poor")
+            if srmr < 0.05:
+                print("✓ Excellent fit")
+            elif srmr < 0.08:
+                print("✓ Acceptable fit")
+            else:
+                print("⚠ Poor fit")
+        
+        if 'GFI' in fit_stats:
+            gfi = get_scalar(fit_stats['GFI'])
+            print(f"\nGFI (Goodness of Fit Index): {gfi:.4f}")
+            print("Rule: GFI > 0.95 = good fit")
+            if gfi > 0.95:
+                print("✓ Good fit")
+            else:
+                print("⚠ May need improvement")
+        
+        if 'AGFI' in fit_stats:
+            agfi = get_scalar(fit_stats['AGFI'])
+            print(f"\nAGFI (Adjusted Goodness of Fit Index): {agfi:.4f}")
+            print("Rule: AGFI > 0.90 = acceptable")
+            if agfi > 0.90:
+                print("✓ Acceptable fit")
+            else:
+                print("⚠ May need improvement")
+        
+        # Create summary table
+        print("\n" + "="*70)
+        print("FIT SUMMARY")
+        print("="*70)
+        
+        summary_data = []
+        if 'CFI' in fit_stats:
+            cfi_val = get_scalar(fit_stats['CFI'])
+            summary_data.append(['CFI', f"{cfi_val:.4f}", '> 0.95', 
+                                '✓ Good' if cfi_val > 0.95 else ('✓ OK' if cfi_val > 0.90 else '⚠ Poor')])
+        if 'RMSEA' in fit_stats:
+            rmsea_val = get_scalar(fit_stats['RMSEA'])
+            summary_data.append(['RMSEA', f"{rmsea_val:.4f}", '< 0.05', 
+                                '✓ Good' if rmsea_val < 0.05 else ('✓ OK' if rmsea_val < 0.08 else '⚠ Poor')])
+        if 'SRMR' in fit_stats:
+            srmr_val = get_scalar(fit_stats['SRMR'])
+            summary_data.append(['SRMR', f"{srmr_val:.4f}", '< 0.05', 
+                                '✓ Good' if srmr_val < 0.05 else ('✓ OK' if srmr_val < 0.08 else '⚠ Poor')])
+        if 'GFI' in fit_stats:
+            gfi_val = get_scalar(fit_stats['GFI'])
+            summary_data.append(['GFI', f"{gfi_val:.4f}", '> 0.95', 
+                                '✓ Good' if gfi_val > 0.95 else '⚠ Check'])
+        
+        if summary_data:
+            fit_summary = pd.DataFrame(summary_data, columns=['Index', 'Value', 'Cutoff', 'Status'])
+            print(fit_summary.to_string(index=False))
+        else:
+            print("No fit indices available. This may be a just-identified model.")
+        
+    except Exception as e:
+        print(f"\n⚠ Could not calculate fit indices: {e}")
+        print("Note: Fit indices are typically only available for over-identified models.")
+        print("Your model may be saturated (just-identified), which means it perfectly fits the data by design.")
+    
+    print("\n" + "="*70)
+    print("END OF MODEL FIT EVALUATION")
+    print("="*70)
+    
     # ========== STEP 8: FILTER STRUCTURAL COEFFICIENTS ==========
     # Extract only the regression coefficients (op='~') for the 'Attitude' variable
     # This gives us the direct effects of environmental factors on Attitude
