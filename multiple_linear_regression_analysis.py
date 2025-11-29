@@ -7,6 +7,7 @@ import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from scipy import stats
 
 def run_analysis():
     # ========== STEP 1: DATA LOADING ==========
@@ -73,6 +74,66 @@ def run_analysis():
     # ========== STEP 9: DISPLAY REGRESSION RESULTS ==========
     # Print complete regression summary including coefficients, R-squared, p-values, etc.
     print(model.summary())
+    
+    # ========== STEP 9.5: MODEL DIAGNOSTICS ==========
+    print("\n" + "="*70)
+    print("MODEL DIAGNOSTICS")
+    print("="*70)
+    
+    # ---------- Test 1: Variance Inflation Factor (VIF) for Multicollinearity ----------
+    print("\n[Test 1] Variance Inflation Factor (VIF) - Multicollinearity Check:")
+    print("Rule: VIF < 5 is acceptable, VIF < 10 is tolerable, VIF > 10 indicates multicollinearity")
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    
+    # Calculate VIF for each predictor (excluding constant)
+    X_for_vif = X.drop('const', axis=1)
+    vif_data = pd.DataFrame()
+    vif_data["Variable"] = X_for_vif.columns
+    vif_data["VIF"] = [variance_inflation_factor(X_for_vif.values, i) for i in range(X_for_vif.shape[1])]
+    vif_data = vif_data.sort_values('VIF', ascending=False)
+    print(vif_data.to_string(index=False))
+    
+    # Warn about high multicollinearity
+    high_vif = vif_data[vif_data['VIF'] > 10]
+    if not high_vif.empty:
+        print("⚠ WARNING: High multicollinearity detected in:")
+        print(high_vif.to_string(index=False))
+    else:
+        print("✓ All VIF values are acceptable (< 10)")
+    
+    # ---------- Test 2: Breusch-Pagan Test for Heteroscedasticity ----------
+    print("\n[Test 2] Breusch-Pagan Test - Heteroscedasticity Check:")
+    print("H0: Homoscedasticity (constant variance)")
+    print("H1: Heteroscedasticity (non-constant variance)")
+    from statsmodels.stats.diagnostic import het_breuschpagan
+    
+    bp_test = het_breuschpagan(model.resid, model.model.exog)
+    labels = ['LM Statistic', 'LM-Test p-value', 'F-Statistic', 'F-Test p-value']
+    print(pd.DataFrame([bp_test], columns=labels).to_string(index=False))
+    
+    if bp_test[1] < 0.05:
+        print("⚠ WARNING: Heteroscedasticity detected (p < 0.05). Consider using robust standard errors.")
+    else:
+        print(f"✓ Homoscedasticity assumption satisfied (p = {bp_test[1]:.4f})")
+    
+    # ---------- Test 3: Jarque-Bera Test for Normality of Residuals ----------
+    print("\n[Test 3] Jarque-Bera Test - Normality of Residuals:")
+    print("H0: Residuals are normally distributed")
+    print("H1: Residuals are not normally distributed")
+    from scipy.stats import jarque_bera
+    
+    jb_test = jarque_bera(model.resid)
+    print(f"JB Statistic: {jb_test[0]:.4f}")
+    print(f"P-value: {jb_test[1]:.4f}")
+    
+    if jb_test[1] < 0.05:
+        print("⚠ WARNING: Residuals are not normally distributed (p < 0.05)")
+    else:
+        print(f"✓ Normality assumption satisfied (p = {jb_test[1]:.4f})")
+    
+    print("\n" + "="*70)
+    print("END OF MODEL DIAGNOSTICS")
+    print("="*70)
 
     # ========== STEP 10: IDENTIFY DECISIVE FACTOR ==========
     print("\nAnalysis of Decisive Factor:")
